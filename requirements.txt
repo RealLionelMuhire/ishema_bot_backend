@@ -4,6 +4,7 @@ charset-normalizer==3.4.0
 Django==5.1.2
 django-cors-headers==4.5.0
 djangorestframework==3.15.2
+gunicorn==21.2.0
 idna==3.10
 python-decouple==3.8
 requests==2.32.3
