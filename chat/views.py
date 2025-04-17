@@ -234,8 +234,8 @@ def load_chat_bot_base_configuration(request):
     response = {
         'botStatus': 1,
         'StartUpMessage': (
-            "Hi, Welcome to ML Corporate Services! How can I assist you today? "
-            "To continue in French, type 'J'utilise le français'."
+            "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness. "
+            "How can I help you today?'."
         ),
         'fontSize': '16',
         'userAvatarURL': 'https://learnwithhasan.com/wp-content/uploads/2023/09/pngtree-businessman-user-avatar-wearing-suit-with-red-tie-png-image_5809521.png',
