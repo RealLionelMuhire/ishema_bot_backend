@@ -28,5 +28,8 @@ COPY . .
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
-# Run gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "ml_chatbot.wsgi:application"] 
+# Make start.py executable
+RUN chmod +x start.py
+
+# Run the start script which handles PORT environment variable
+CMD ["python", "start.py"] 

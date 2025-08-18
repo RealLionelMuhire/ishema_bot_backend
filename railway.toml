@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+
+[deploy]
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[variables]
+PYTHONUNBUFFERED = "1"
+DISABLE_COLLECTSTATIC = "1"
