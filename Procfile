@@ -1,1 +1,0 @@
-web: gunicorn ml_chatbot.wsgi:application --bind 0.0.0.0:$PORT 
