@@ -7,7 +7,21 @@ def main():
     # Get PORT from environment, default to 8000
     port = os.environ.get('PORT', '8000')
     
-    print(f"Starting server on port {port}")
+    print(f"Environment PORT variable: {os.environ.get('PORT', 'NOT SET')}")
+    print(f"Using port: {port}")
+    print(f"Port type: {type(port)}")
+    
+    # Validate port
+    try:
+        port_int = int(port)
+        if port_int <= 0 or port_int > 65535:
+            print(f"Invalid port number: {port_int}, using default 8000")
+            port = '8000'
+    except ValueError:
+        print(f"Port is not a valid integer: {port}, using default 8000")
+        port = '8000'
+    
+    print(f"Final port to use: {port}")
     
     # Run migrations
     print("Running migrations...")
