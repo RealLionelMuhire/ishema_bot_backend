@@ -23,19 +23,12 @@ def main():
     
     print(f"Final port to use: {port}")
     
-    # Run migrations
-    print("Running migrations...")
-    subprocess.run([sys.executable, 'manage.py', 'migrate', '--noinput'], check=False)
-    
-    # Collect static files
-    print("Collecting static files...")
-    subprocess.run([sys.executable, 'manage.py', 'collectstatic', '--noinput'], check=False)
-    
-    # Start gunicorn
+    # Start gunicorn (migrations and collectstatic are handled in build.sh for Render)
     print("Starting gunicorn...")
     cmd = [
         'gunicorn',
         '--bind', f'0.0.0.0:{port}',
+        '--workers', '4',  # Render recommends multiple workers
         'ml_chatbot.wsgi:application'
     ]
     
