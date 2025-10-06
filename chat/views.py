@@ -342,8 +342,9 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Muraho! Ndi Ishema ryanjye, chatbot yawe nkana ishingiye ku buzima bw'imyororokere na ubwongoze. "
-                "Ungufasha ute uyu munsi?"
+                "Muraho! Ndi Ishema ryanjye, chatbot yawe nkana ishingiye ku buzima bw'imyororokere na ubwongoze "
+                "ndetse n'imikino ya Ishema ryanjye ikarita. Nshobora gutanga amakuru ku buzima bw'imyororokere "
+                "na ubwongoze, nkagusobanurira uburyo bwo gukina imikino ya Ishema ryanjye. Ungufasha ute uyu munsi?"
             ),
             'commonButtons': [
                 {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
@@ -356,7 +357,9 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Bonjour! Je suis Ishema ryanjye, votre chatbot amical axé sur la sensibilisation à la santé sexuelle et reproductive. "
+                "Bonjour! Je suis Ishema ryanjye, votre chatbot amical spécialisé dans la sensibilisation à la santé "
+                "sexuelle et reproductive ainsi que le jeu de cartes Ishema ryanjye. Je peux vous fournir des "
+                "informations sur la santé reproductive et vous expliquer comment jouer au jeu Ishema ryanjye. "
                 "Comment puis-je vous aider aujourd'hui?"
             ),
             'commonButtons': [
@@ -370,8 +373,9 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness. "
-                "How can I help you today?"
+                "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness "
+                "and the Ishema ryanjye card game. I can provide information about sexual and reproductive health "
+                "topics and explain how to play the Ishema ryanjye card game. How can I help you today?"
             ),
             'commonButtons': [
                 {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
