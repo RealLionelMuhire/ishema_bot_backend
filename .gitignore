@@ -1,2 +1,17 @@
 .env
 ml_bott/
+
+# Virtual environment
+hpo_venv/
+hpo_venv/*
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
