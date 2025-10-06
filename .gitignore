@@ -1,4 +1,8 @@
 .env
+.env.swp
+*.swp
+*.swo
+*~
 ml_bott/
 
 # Virtual environment
