@@ -326,20 +326,59 @@ def handle_chat_bot_request(request):
 
 @api_view(['GET'])
 def load_chat_bot_base_configuration(request):
-    response = {
+    # Get language parameter from query string
+    language = request.GET.get('language', 'english').lower()
+    
+    # Base configuration
+    base_config = {
         'botStatus': 1,
-        'StartUpMessage': (
-            "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness. "
-            "How can I help you today?'."
-        ),
         'fontSize': '16',
         'userAvatarURL': 'https://learnwithhasan.com/wp-content/uploads/2023/09/pngtree-businessman-user-avatar-wearing-suit-with-red-tie-png-image_5809521.png',
         'botImageURL': 'https://mlcorporateservices.com/wp-content/uploads/2022/09/cropped-Mlydie_-1.png',
-        'commonButtons': [
-            {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
-            {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
-            {'buttonText': 'What services do you offer?', 'buttonPrompt': 'What services do you offer?'},
-            {'buttonText': 'How can I contact you?', 'buttonPrompt': 'How can I contact you?'}
-        ]
     }
+    
+    # Language-specific configurations
+    if language == 'kinyarwanda':
+        response = {
+            **base_config,
+            'StartUpMessage': (
+                "Muraho! Ndi Ishema ryanjye, chatbot yawe nkana ishingiye ku buzima bw'imyororokere na ubwongoze. "
+                "Ungufasha ute uyu munsi?"
+            ),
+            'commonButtons': [
+                {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
+                {'buttonText': 'I use English', 'buttonPrompt': 'I use English'},
+                {'buttonText': 'Ni ayahe maservisisi dutanga?', 'buttonPrompt': 'Ni ayahe maservisisi dutanga?'},
+                {'buttonText': 'Nigute nashakatse?', 'buttonPrompt': 'Nigute nashakatse?'}
+            ]
+        }
+    elif language == 'french':
+        response = {
+            **base_config,
+            'StartUpMessage': (
+                "Bonjour! Je suis Ishema ryanjye, votre chatbot amical axé sur la sensibilisation à la santé sexuelle et reproductive. "
+                "Comment puis-je vous aider aujourd'hui?"
+            ),
+            'commonButtons': [
+                {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
+                {'buttonText': 'I use English', 'buttonPrompt': 'I use English'},
+                {'buttonText': 'Quels services offrez-vous?', 'buttonPrompt': 'Quels services offrez-vous?'},
+                {'buttonText': 'Comment puis-je vous contacter?', 'buttonPrompt': 'Comment puis-je vous contacter?'}
+            ]
+        }
+    else:  # Default to English
+        response = {
+            **base_config,
+            'StartUpMessage': (
+                "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness. "
+                "How can I help you today?"
+            ),
+            'commonButtons': [
+                {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
+                {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
+                {'buttonText': 'What services do you offer?', 'buttonPrompt': 'What services do you offer?'},
+                {'buttonText': 'How can I contact you?', 'buttonPrompt': 'How can I contact you?'}
+            ]
+        }
+    
     return JsonResponse(response)
