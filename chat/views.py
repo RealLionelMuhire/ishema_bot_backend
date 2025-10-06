@@ -52,13 +52,26 @@ def detect_service_query(prompt):
             return service
     return None
 
+# Function to detect Kinyarwanda language
+def detect_kinyarwanda(text):
+    kinyarwanda_keywords = [
+        'muraho', 'mwaramutse', 'amakuru', 'urakoze', 'murabeho', 'ubwoba', 'ubuzima',
+        'abana', 'abakobwa', 'abahungu', 'ubushyinzi', 'ubwoba', 'kwiga', 'gukina',
+        'amakuru', 'ubuzima', 'kwibuka', 'kwiga', 'kuvuga', 'gusoma', 'kwandika',
+        'nte', 'ningeze', 'nabona', 'ndashaka', 'ndabona', 'ndasaba', 'nkeneye',
+        'iki', 'ibi', 'gute', 'ryari', 'hehe', 'bangahe', 'gukina', 'imikino',
+        'amagambo', 'ikarita', 'ubwenge', 'ubumenyi'
+    ]
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in kinyarwanda_keywords)
+
 # Humanistic response generator for sensitive or know-how related queries
 def generate_humanistic_response(service):
     general_info = generate_general_info(service)
     return f"""
     It seems like you're asking for specific details related to "{service}". While we can't share proprietary or confidential information, I can tell you that {general_info}
     
-    If you need more detailed insights, feel free to contact us directly at support@mlcorporateservices.com or call us at +250-123-456789. We're always here to help!
+    If you need more detailed insights, feel free to contact us directly at info@hporwanda.org or call us at +250-123-456789. We're always here to help!
     """
 
 
@@ -170,19 +183,31 @@ def handle_chat_bot_request(request):
             # Generate a humanistic response with general info and support
             response = generate_humanistic_response(detected_service)
         else:
-            response = "We value confidentiality and cannot share certain sensitive details publicly. However, we can assist you with services or general information. Please contact us at support@mlcorporateservices.com or call us at +250-123-456789 for assistance."
+            response = "We value confidentiality and cannot share certain sensitive details publicly. However, we can assist you with services or general information. Please contact us at info@hporwanda.org or call us at +250-123-456789 for assistance."
         
         return Response({
             'success': True,
             'result': response
         })
     
+    # Detect language and set appropriate system message
     if "J'utilise le français" in last_prompt:
         conversation_history.append({
             'role': 'system',
             'content': (
                 "Merci d'avoir choisi le français. Comment puis-je vous aider aujourd'hui ? "
                 "N'hésitez pas à poser des questions sur nos services."
+            )
+        })
+    elif detect_kinyarwanda(last_prompt):
+        # Kinyarwanda response
+        conversation_history.append({
+            'role': 'system',
+            'content': (
+                "Uri Ishema ryanjye, chatbot ikoreshwa mu gutanga amakuru yerekeye ubuzima bw'imyororokere na ubwongoze. "
+                "Ugomba gutanga amakuru gusa ashingiye ku byanditswe mu gitabo cya Ishema ryanjye n'amakuru y'ubuzima bw'imyororokere na ubwongoze byakatanzwe. "
+                "NTUGOMBA gukoresha ubumenyi bwite cyangwa amakuru atari ayo watanzwe mu nteruro. "
+                "Niba amakuru yatanzwe adafite ibikenewe byo gusubiza ikibazo, vuga ko 'Nshobora gutanga amakuru gusa ashingiye ku byanditswe mu gitabo cya Ishema ryanjye.'"
             )
         })
     else:
@@ -211,22 +236,44 @@ def handle_chat_bot_request(request):
 
     pinecone_context = query_pinecone(query_embedding)
     if isinstance(pinecone_context, dict) and 'error' in pinecone_context:
-        # If no relevant data found, inform the user
+        # If no relevant data found, inform the user in appropriate language
+        if detect_kinyarwanda(last_prompt):
+            error_message = "Nshobora gutanga amakuru gusa ashingiye ku gitabo cya Ishema ryanjye n'amakuru y'ubuzima bw'imyororokere na ubwongoze byakatanzwe. Sinfite amakuru ku kibazo cyawe. Nyamuneka baza ku ngingo ziri mu gitabo."
+        elif "J'utilise le français" in last_prompt:
+            error_message = "Je ne peux fournir que des informations basées sur le manuel Ishema ryanjye et les données de santé reproductive qui ont été chargées. Je n'ai pas d'informations sur votre question spécifique. Veuillez poser des questions sur les sujets couverts dans le manuel."
+        else:
+            error_message = "I can only provide information based on the Ishema ryanjye handbook and sexual reproductive health data that has been loaded. I don't have information about your specific question. Please try asking about topics covered in the handbook."
+            
         return Response({
             'success': True,
-            'result': "I can only provide information based on the Ishema ryanjye handbook and sexual reproductive health data that has been loaded. I don't have information about your specific question. Please try asking about topics covered in the handbook."
+            'result': error_message
         })
 
     if pinecone_context:
+        # Determine response language based on the prompt
+        if detect_kinyarwanda(last_prompt):
+            language_instruction = "Subiza mu Kinyarwanda. Gukoresha gusa amakuru yatanzwe hano."
+        elif "J'utilise le français" in last_prompt:
+            language_instruction = "Répondez en français. Utilisez uniquement les informations fournies ici."
+        else:
+            language_instruction = "Respond in English. Only use the information provided here."
+            
         conversation_history.append({
             'role': 'system',
-            'content': f"Based on the Ishema ryanjye handbook and sexual reproductive health data: \n{pinecone_context}\n\nOnly provide information based on this content. Do not add general knowledge outside of this context."
+            'content': f"Based on the Ishema ryanjye handbook and sexual reproductive health data: \n{pinecone_context}\n\n{language_instruction} Do not add general knowledge outside of this context."
         })
     else:
-        # No context found
+        # No context found - provide message in appropriate language
+        if detect_kinyarwanda(last_prompt):
+            no_context_message = "Nshobora gusubiza ibibazo gusa bishingiye ku amakuru ari mu gitabo cya Ishema ryanjye. Nyamuneka baza ku ngingo ziri mu gitabo."
+        elif "J'utilise le français" in last_prompt:
+            no_context_message = "Je ne peux répondre qu'aux questions basées sur les informations du manuel Ishema ryanjye. Veuillez poser des questions sur les sujets couverts dans le manuel."
+        else:
+            no_context_message = "I can only answer questions based on the information in the Ishema ryanjye handbook. Please ask about topics covered in the handbook."
+            
         return Response({
             'success': True,
-            'result': "I can only answer questions based on the information in the Ishema ryanjye handbook. Please ask about topics covered in the handbook."
+            'result': no_context_message
         })
 
     openai_body = {
@@ -290,6 +337,7 @@ def load_chat_bot_base_configuration(request):
         'botImageURL': 'https://mlcorporateservices.com/wp-content/uploads/2022/09/cropped-Mlydie_-1.png',
         'commonButtons': [
             {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
+            {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
             {'buttonText': 'What services do you offer?', 'buttonPrompt': 'What services do you offer?'},
             {'buttonText': 'How can I contact you?', 'buttonPrompt': 'How can I contact you?'}
         ]
