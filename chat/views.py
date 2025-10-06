@@ -73,12 +73,29 @@ def get_embedding(text):
         'model': 'text-embedding-ada-002',
         'input': text
     }
-    response = requests.post(embedding_url, json=body, headers=headers)
-    if response.status_code == 200:
-        return response.json().get('data')[0].get('embedding', [])
-    else:
-        # Handle embedding API errors and return it
-        return {'error': f"OpenAI Embedding Error: {response.status_code} - {response.text}"}
+    
+    try:
+        # Add timeout and SSL verification settings
+        response = requests.post(
+            embedding_url, 
+            json=body, 
+            headers=headers,
+            timeout=30,
+            verify=True
+        )
+        if response.status_code == 200:
+            return response.json().get('data')[0].get('embedding', [])
+        else:
+            # Handle embedding API errors and return it
+            return {'error': f"OpenAI Embedding Error: {response.status_code} - {response.text}"}
+    except requests.exceptions.SSLError as e:
+        return {'error': f"SSL Error connecting to OpenAI: {str(e)}"}
+    except requests.exceptions.ConnectionError as e:
+        return {'error': f"Connection Error to OpenAI: {str(e)}"}
+    except requests.exceptions.Timeout as e:
+        return {'error': f"Timeout Error connecting to OpenAI: {str(e)}"}
+    except Exception as e:
+        return {'error': f"Unexpected error calling OpenAI: {str(e)}"}
 
 # Helper to query Pinecone
 def query_pinecone(query_embedding):
@@ -116,13 +133,22 @@ def query_pinecone(query_embedding):
         if 'matches' in data and data['matches']:
             contexts = []
             for match in data['matches']:
-                content = match['metadata'].get('content')
-                if content:
+                # Debug: print the match structure to understand metadata
+                print(f"DEBUG - Match structure: {match}")
+                
+                # Try different possible metadata keys
+                content = (
+                    match['metadata'].get('content') or 
+                    match['metadata'].get('text') or 
+                    match.get('metadata', {}).get('page_content') or
+                    str(match.get('metadata', {}))
+                )
+                if content and content != '{}':
                     contexts.append(content)
             if contexts:
                 return "\n".join(contexts)
             else:
-                return {'error': 'No relevant content found in Pinecone matches'}
+                return {'error': f'No relevant content found in Pinecone matches. Match count: {len(data["matches"])}'}
         else:
             return {'error': 'No matches found in Pinecone response'}
             
@@ -164,9 +190,10 @@ def handle_chat_bot_request(request):
         conversation_history.append({
             'role': 'system',
             'content': (
-                "You are Ishema ryanjye, a friendly chatbot focused on sexual and reproductive health awareness. "
-                "Your goal is to provide accurate, non-judgmental information about SRH topics in a safe and supportive way. "
-                "If you don't know the answer to a question, say so and encourage the user to speak with a healthcare provider."
+                "You are Ishema ryanjye, a chatbot that ONLY provides information from the loaded Ishema ryanjye handbook and sexual reproductive health data. "
+                "You must ONLY answer based on the provided context from the handbook. "
+                "Do NOT use general knowledge or information outside of what's provided in the context. "
+                "If the provided context doesn't contain enough information to answer the question, say 'I can only answer based on the information in the Ishema ryanjye handbook.'"
             )
         })
 
@@ -179,24 +206,27 @@ def handle_chat_bot_request(request):
     if isinstance(query_embedding, dict) and 'error' in query_embedding:
         return Response({
             'success': False,
-            'message': query_embedding['error']
+            'message': "Unable to process your question due to technical issues. Please try again later."
         }, status=500)
 
     pinecone_context = query_pinecone(query_embedding)
     if isinstance(pinecone_context, dict) and 'error' in pinecone_context:
-        # If we get an error or empty response, provide Ishema ryanjye information
-        if not pinecone_context or 'error' in pinecone_context:
-            pinecone_context = (
-                "Ishema ryanjye is a sexual and reproductive health awareness game designed to provide "
-                "accurate information and support about SRH topics in a safe and engaging way. "
-                "Our goal is to promote healthy discussions about sexual and reproductive health, "
-                "prevent STIs, and support overall well-being."
-            )
+        # If no relevant data found, inform the user
+        return Response({
+            'success': True,
+            'result': "I can only provide information based on the Ishema ryanjye handbook and sexual reproductive health data that has been loaded. I don't have information about your specific question. Please try asking about topics covered in the handbook."
+        })
 
     if pinecone_context:
         conversation_history.append({
             'role': 'system',
-            'content': f"Relevant information: \n{pinecone_context}"
+            'content': f"Based on the Ishema ryanjye handbook and sexual reproductive health data: \n{pinecone_context}\n\nOnly provide information based on this content. Do not add general knowledge outside of this context."
+        })
+    else:
+        # No context found
+        return Response({
+            'success': True,
+            'result': "I can only answer questions based on the information in the Ishema ryanjye handbook. Please ask about topics covered in the handbook."
         })
 
     openai_body = {
@@ -210,21 +240,39 @@ def handle_chat_bot_request(request):
         'Content-Type': 'application/json'
     }
 
-    response = requests.post('https://api.openai.com/v1/chat/completions', json=openai_body, headers=headers)
-    if response.status_code == 200:
-        result = response.json().get('choices')[0]['message']['content']
-        # Replace empty responses with Ishema ryanjye information
-        if not result.strip():
-            result = (
-                "Ishema ryanjye is here to help! I'm a friendly chatbot focused on sexual and reproductive health awareness. "
-                "I can provide information about various SRH topics, answer your questions, and help you make informed decisions "
-                "about your sexual and reproductive health. What would you like to know?"
-            )
-        return Response({'success': True, 'result': result})
-    else:
+    try:
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions', 
+            json=openai_body, 
+            headers=headers,
+            timeout=30,
+            verify=True
+        )
+        if response.status_code == 200:
+            result = response.json().get('choices')[0]['message']['content']
+            # Ensure we only provide responses based on loaded data
+            if not result.strip():
+                result = "I can only provide information based on the Ishema ryanjye handbook. Please ask a specific question about the content in the handbook."
+            return Response({'success': True, 'result': result})
+        else:
+            return Response({
+                'success': False,
+                'message': f"OpenAI API Error: {response.status_code} - {response.text}"
+            }, status=500)
+    except requests.exceptions.SSLError as e:
         return Response({
             'success': False,
-            'message': f"OpenAI API Error: {response.status_code} - {response.text}"
+            'message': "Technical issues connecting to AI service. Please try again later."
+        }, status=500)
+    except requests.exceptions.ConnectionError as e:
+        return Response({
+            'success': False,
+            'message': "Connection issues. Please try again later."
+        }, status=500)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f"Unexpected error: {str(e)}"
         }, status=500)
 
 
