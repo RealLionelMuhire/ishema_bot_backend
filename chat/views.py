@@ -146,17 +146,24 @@ def query_pinecone(query_embedding):
         if 'matches' in data and data['matches']:
             contexts = []
             for match in data['matches']:
-                # Debug: print the match structure to understand metadata
-                print(f"DEBUG - Match structure: {match}")
+                # Try different possible metadata keys in order of preference
+                metadata = match.get('metadata', {})
+                content = None
                 
-                # Try different possible metadata keys
-                content = (
-                    match['metadata'].get('content') or 
-                    match['metadata'].get('text') or 
-                    match.get('metadata', {}).get('page_content') or
-                    str(match.get('metadata', {}))
-                )
-                if content and content != '{}':
+                # Common metadata field names to try
+                possible_keys = ['text', 'content', 'page_content', 'source', 'chunk', 'data']
+                
+                for key in possible_keys:
+                    if key in metadata and metadata[key]:
+                        content = str(metadata[key]).strip()
+                        break
+                
+                # If no content found in metadata, try the match itself
+                if not content and 'values' in match:
+                    # Sometimes content might be in different structure
+                    content = "Content found but in non-standard format"
+                
+                if content and content != '{}' and len(content.strip()) > 0:
                     contexts.append(content)
             if contexts:
                 return "\n".join(contexts)
@@ -342,9 +349,8 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Muraho! Ndi Ishema ryanjye, chatbot yawe nkana ishingiye ku buzima bw'imyororokere na ubwongoze "
-                "ndetse n'imikino ya Ishema ryanjye ikarita. Nshobora gutanga amakuru ku buzima bw'imyororokere "
-                "na ubwongoze, nkagusobanurira uburyo bwo gukina imikino ya Ishema ryanjye. Ungufasha ute uyu munsi?"
+                "Muraho! Ndi Ishema ryanjye. Nshobora gutanga amakuru ku buzima bw'imyororokere "
+                "na ubwongoze ndetse n'imikino ya Ishema ryanjye. Ungufasha ute?"
             ),
             'commonButtons': [
                 {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
@@ -357,10 +363,8 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Bonjour! Je suis Ishema ryanjye, votre chatbot amical spécialisé dans la sensibilisation à la santé "
-                "sexuelle et reproductive ainsi que le jeu de cartes Ishema ryanjye. Je peux vous fournir des "
-                "informations sur la santé reproductive et vous expliquer comment jouer au jeu Ishema ryanjye. "
-                "Comment puis-je vous aider aujourd'hui?"
+                "Bonjour! Je suis Ishema ryanjye. Je peux vous aider avec la santé reproductive "
+                "et le jeu de cartes Ishema ryanjye. Comment puis-je vous aider?"
             ),
             'commonButtons': [
                 {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
@@ -373,9 +377,8 @@ def load_chat_bot_base_configuration(request):
         response = {
             **base_config,
             'StartUpMessage': (
-                "Hello! I'm Ishema ryanjye, your friendly chatbot focused on sexual and reproductive health awareness "
-                "and the Ishema ryanjye card game. I can provide information about sexual and reproductive health "
-                "topics and explain how to play the Ishema ryanjye card game. How can I help you today?"
+                "Hello! I'm Ishema ryanjye. I can help you with sexual and reproductive health "
+                "topics and the Ishema ryanjye card game. How can I help you?"
             ),
             'commonButtons': [
                 {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
