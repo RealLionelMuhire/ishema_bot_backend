@@ -355,49 +355,6 @@ def handle_chat_bot_request(request):
 
 
 @api_view(['GET'])
-def debug_pinecone_status(request):
-    """Debug endpoint to check Pinecone connection and data status"""
-    try:
-        # Test embedding generation
-        test_query = "test connection"
-        embedding_result = get_embedding(test_query)
-        
-        if isinstance(embedding_result, dict) and 'error' in embedding_result:
-            return JsonResponse({
-                'pinecone_url': PINECONE_URL,
-                'openai_status': 'error',
-                'openai_error': embedding_result['error'],
-                'pinecone_status': 'not_tested'
-            })
-        
-        # Test Pinecone query
-        pinecone_result = query_pinecone(embedding_result)
-        
-        return JsonResponse({
-            'pinecone_url': PINECONE_URL,
-            'openai_status': 'working',
-            'embedding_dimensions': len(embedding_result),
-            'pinecone_status': 'working' if isinstance(pinecone_result, str) else 'error',
-            'pinecone_result': pinecone_result if isinstance(pinecone_result, dict) else f"Found {len(pinecone_result)} characters of data",
-            'environment_check': {
-                'pinecone_api_key_set': bool(PINECONE_API_KEY),
-                'openai_api_key_set': bool(OPENAI_API_KEY),
-                'pinecone_url_set': bool(PINECONE_URL)
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'pinecone_url': PINECONE_URL,
-            'environment_check': {
-                'pinecone_api_key_set': bool(PINECONE_API_KEY),
-                'openai_api_key_set': bool(OPENAI_API_KEY),
-                'pinecone_url_set': bool(PINECONE_URL)
-            }
-        })
-
-@api_view(['GET'])
 def load_chat_bot_base_configuration(request):
     # Get language parameter from query string
     language = request.GET.get('language', 'english').lower()
