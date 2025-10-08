@@ -41,14 +41,18 @@ def generate_general_info(service):
 
 # Modify the sensitive check to provide general information
 def contains_sensitive_info(prompt):
+    if not prompt:
+        return False
     for keyword in SENSITIVE_KEYWORDS:
         if keyword.lower() in prompt.lower():
             return True
     return False
 
 def detect_service_query(prompt):
+    if not prompt:
+        return None
     for service in KNOWN_SERVICES:
-        if service.lower() in prompt.lower():
+        if service and service.lower() in prompt.lower():
             return service
     return None
 
@@ -180,12 +184,17 @@ def query_pinecone(query_embedding):
 @csrf_exempt
 @api_view(['POST'])
 def handle_chat_bot_request(request):
-    last_prompt = request.data.get('last_prompt')
+    last_prompt = request.data.get('last_prompt') or request.data.get('message')
     conversation_history = request.data.get('conversation_history', [])
 
     # Check for sensitive information
     detected_service = detect_service_query(last_prompt)
-    if contains_sensitive_info(last_prompt) or detected_service:
+    print(f"DEBUG: detected_service: {detected_service}")
+    contains_sensitive = contains_sensitive_info(last_prompt)
+    print(f"DEBUG: contains_sensitive: {contains_sensitive}")
+    
+    if contains_sensitive or detected_service:
+        print(f"DEBUG: Taking early exit path")
         if detected_service:
             # Generate a humanistic response with general info and support
             response = generate_humanistic_response(detected_service)
@@ -196,6 +205,8 @@ def handle_chat_bot_request(request):
             'success': True,
             'result': response
         })
+    
+    print(f"DEBUG: Proceeding to Pinecone query")
     
     # Detect language and set appropriate system message
     if "J'utilise le français" in last_prompt:
@@ -243,14 +254,18 @@ def handle_chat_bot_request(request):
     })
 
     query_embedding = get_embedding(last_prompt)
+    print(f"DEBUG: query_embedding type: {type(query_embedding)}")
     if isinstance(query_embedding, dict) and 'error' in query_embedding:
+        print(f"DEBUG: embedding error: {query_embedding}")
         return Response({
             'success': False,
             'message': "Unable to process your question due to technical issues. Please try again later."
         }, status=500)
 
     pinecone_context = query_pinecone(query_embedding)
+    print(f"DEBUG: pinecone_context type: {type(pinecone_context)}")
     if isinstance(pinecone_context, dict) and 'error' in pinecone_context:
+        print(f"DEBUG: pinecone error: {pinecone_context}")
         # If no relevant data found, inform the user in appropriate language
         if detect_kinyarwanda(last_prompt):
             error_message = "Nshobora gutanga amakuru gusa ashingiye ku gitabo cya Ishema ryanjye n'amakuru y'ubuzima bw'imyororokere na ubwongoze byakatanzwe. Sinfite amakuru ku kibazo cyawe. Nyamuneka baza ku ngingo ziri mu gitabo."
