@@ -1,7 +1,8 @@
 import requests
+import json
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from decouple import AutoConfig
@@ -10,78 +11,31 @@ config = AutoConfig()
 PINECONE_URL = config('PINECONE_URL')
 PINECONE_API_KEY = config('PINECONE_API_KEY')
 OPENAI_API_KEY = config('OPENAI_API_KEY')
-SENSITIVE_KEYWORDS = [
-    'personal medical history', 'specific diagnosis', 'private health details',
-    'explicit content', 'identifying information', 'confidential test results',
-    'personal contact', 'exact location', 'private conversations'
-]
 
-# List of known services and general information related to sexual and reproductive health
-KNOWN_SERVICES = [
-    'contraception', 'family planning', 'STI prevention', 'HIV testing',
-    'pregnancy care', 'menstrual health', 'sexual education', 'reproductive rights',
-    'gender health', 'adolescent health'
-]
+# Threshold for Pinecone match scores
+PINECONE_THRESHOLD = 0.77
 
-# Function to provide general information when a sensitive topic is detected
-def generate_general_info(service):
-    general_responses = {
-        'contraception': 'Ishema ryanjye provides information about various contraceptive methods. We can discuss general options, but for personalized advice, please consult a healthcare provider.',
-        'family planning': 'We offer general information about family planning methods and resources. For specific medical advice, we recommend speaking with a healthcare professional.',
-        'STI prevention': 'We can provide general information about STI prevention methods and safe practices. For testing and specific concerns, please visit a healthcare facility.',
-        'HIV testing': 'We can share general information about HIV testing options. For testing services and confidential results, please visit a healthcare facility or testing center.',
-        'pregnancy care': 'We provide general information about pregnancy care. For personal medical advice, please consult with a healthcare provider.',
-        'menstrual health': 'We offer information about menstrual health and hygiene. For specific concerns, we recommend speaking with a healthcare provider.',
-        'sexual education': 'We provide age-appropriate sexual education information. For specific questions, we encourage speaking with trusted adults or healthcare providers.',
-        'reproductive rights': 'We can discuss general information about reproductive rights and access to healthcare services.',
-        'gender health': 'We provide information about gender health and related services. For personal support, we recommend consulting with healthcare professionals.',
-        'adolescent health': 'We offer general information about adolescent health and development. For specific concerns, we encourage speaking with trusted adults or healthcare providers.'
-    }
-    return general_responses.get(service, f'Ishema ryanjye provides information about sexual and reproductive health. For specific questions about "{service}", we recommend consulting a healthcare provider.')
+# System prompt
+SYSTEM_PROMPT = """
+You are ISHEMA RYANJYE, a specialized chatbot that provides support and information on two main areas:
 
-# Modify the sensitive check to provide general information
-def contains_sensitive_info(prompt):
-    if not prompt:
-        return False
-    for keyword in SENSITIVE_KEYWORDS:
-        if keyword.lower() in prompt.lower():
-            return True
-    return False
+1. Sexual and Reproductive Health (SRH) and Mental Health information
+2. The ISHEMA RYANJYE card game - rules, gameplay, and support
 
-def detect_service_query(prompt):
-    if not prompt:
-        return None
-    for service in KNOWN_SERVICES:
-        if service and service.lower() in prompt.lower():
-            return service
-    return None
+If asked about your role, respond dynamically and explain: "I am ISHEMA RYANJYE. I provide support and information on sexual reproductive health, mental health, and the ISHEMA RYANJYE card game." Ensure the response adapts to the user's language.
 
-# Function to detect Kinyarwanda language
-def detect_kinyarwanda(text):
-    kinyarwanda_keywords = [
-        'muraho', 'mwaramutse', 'amakuru', 'urakoze', 'murabeho', 'ubwoba', 'ubuzima',
-        'abana', 'abakobwa', 'abahungu', 'ubushyinzi', 'ubwoba', 'kwiga', 'gukina',
-        'amakuru', 'ubuzima', 'kwibuka', 'kwiga', 'kuvuga', 'gusoma', 'kwandika',
-        'nte', 'ningeze', 'nabona', 'ndashaka', 'ndabona', 'ndasaba', 'nkeneye',
-        'iki', 'ibi', 'gute', 'ryari', 'hehe', 'bangahe', 'gukina', 'imikino',
-        'amagambo', 'ikarita', 'ubwenge', 'ubumenyi'
-    ]
-    text_lower = text.lower()
-    return any(keyword in text_lower for keyword in kinyarwanda_keywords)
+For location-specific data, ask the user for their location before answering. Do not provide information from other sources not in the database. Respond only using database content. Do not guess or provide unrelated information. Keep responses short, focused, and concise.
 
-# Humanistic response generator for sensitive or know-how related queries
-def generate_humanistic_response(service):
-    general_info = generate_general_info(service)
-    return f"""
-    It seems like you're asking for specific details related to "{service}". While we can't share proprietary or confidential information, I can tell you that {general_info}
-    
-    If you need more detailed insights, feel free to contact us directly at info@hporwanda.org or call us at +250-123-456789. We're always here to help!
-    """
+For unrelated questions outside of SRH, mental health, or the ISHEMA RYANJYE card game, respond politely that you only assist with these specific topics. Always follow up with a question to keep the conversation active.
 
+Ask for clarification if needed. Provide resources if relevant to the user's query. Proactively ask questions to engage the user and ensure they feel supported.
+
+Chatbot Name: ISHEMA RYANJYE
+We're dedicated to connecting you with reliable sexual and reproductive health services and supporting the ISHEMA RYANJYE card game community.
+"""
 
 # Helper to fetch embeddings
 def get_embedding(text):
-    embedding_url = 'https://api.openai.com/v1/embeddings'
     headers = {
         'Authorization': f'Bearer {OPENAI_API_KEY}',
         'Content-Type': 'application/json'
@@ -92,44 +46,28 @@ def get_embedding(text):
     }
     
     try:
-        # Add timeout and SSL verification settings
         response = requests.post(
-            embedding_url, 
+            'https://api.openai.com/v1/embeddings',
             json=body, 
             headers=headers,
-            timeout=30,
-            verify=True
+            timeout=30
         )
         if response.status_code == 200:
             return response.json().get('data')[0].get('embedding', [])
         else:
-            # Handle embedding API errors and return it
-            return {'error': f"OpenAI Embedding Error: {response.status_code} - {response.text}"}
-    except requests.exceptions.SSLError as e:
-        return {'error': f"SSL Error connecting to OpenAI: {str(e)}"}
-    except requests.exceptions.ConnectionError as e:
-        return {'error': f"Connection Error to OpenAI: {str(e)}"}
-    except requests.exceptions.Timeout as e:
-        return {'error': f"Timeout Error connecting to OpenAI: {str(e)}"}
+            raise Exception(f"OpenAI Embedding Error: {response.status_code}")
     except Exception as e:
-        return {'error': f"Unexpected error calling OpenAI: {str(e)}"}
+        raise Exception(f"Failed to generate embedding: {str(e)}")
 
 # Helper to query Pinecone
 def query_pinecone(query_embedding):
-    # Validate vector dimensions
-    if not isinstance(query_embedding, list):
-        return {'error': 'Query embedding must be a list'}
-    
-    if not query_embedding:
-        return {'error': 'Query embedding cannot be empty'}
-    
     headers = {
         'Content-Type': 'application/json',
         'Api-Key': PINECONE_API_KEY
     }
     body = {
         'vector': query_embedding,
-        'topK': 5,
+        'topK': 50,
         'includeMetadata': True
     }
 
@@ -137,278 +75,191 @@ def query_pinecone(query_embedding):
         response = requests.post(PINECONE_URL, json=body, headers=headers)
         
         if response.status_code != 200:
-            return {'error': f"Pinecone API returned status code {response.status_code}: {response.text}"}
+            raise Exception(f"Pinecone API error: {response.status_code}")
             
-        if not response.text.strip():
-            return {'error': 'Pinecone API returned empty response'}
-            
-        try:
-            data = response.json()
-        except requests.exceptions.JSONDecodeError as e:
-            return {'error': f"Failed to parse Pinecone response: {str(e)}"}
+        data = response.json()
         
         if 'matches' in data and data['matches']:
-            contexts = []
-            for match in data['matches']:
-                # Try different possible metadata keys in order of preference
-                metadata = match.get('metadata', {})
-                content = None
-                
-                # Common metadata field names to try
-                possible_keys = ['text', 'content', 'page_content', 'source', 'chunk', 'data']
-                
-                for key in possible_keys:
-                    if key in metadata and metadata[key]:
-                        content = str(metadata[key]).strip()
-                        break
-                
-                # If no content found in metadata, try the match itself
-                if not content and 'values' in match:
-                    # Sometimes content might be in different structure
-                    content = "Content found but in non-standard format"
-                
-                if content and content != '{}' and len(content.strip()) > 0:
-                    contexts.append(content)
-            if contexts:
-                return "\n".join(contexts)
-            else:
-                return {'error': f'No relevant content found in Pinecone matches. Match count: {len(data["matches"])}'}
-        else:
-            return {'error': 'No matches found in Pinecone response'}
+            # Filter matches by threshold
+            relevant_matches = [
+                match for match in data['matches'] 
+                if match.get('score', 0) >= PINECONE_THRESHOLD
+            ]
             
-    except requests.exceptions.RequestException as e:
-        return {'error': f"Failed to connect to Pinecone: {str(e)}"}
+            if relevant_matches:
+                contexts = []
+                for match in relevant_matches:
+                    metadata = match.get('metadata', {})
+                    content = metadata.get('text') or metadata.get('content') or metadata.get('page_content')
+                    if content:
+                        contexts.append(str(content).strip())
+                
+                return '\n'.join(contexts) if contexts else None
+        
+        return None
+            
+    except Exception as e:
+        raise Exception(f"Failed to query Pinecone: {str(e)}")
 
 
 
 @csrf_exempt
 @api_view(['POST'])
 def handle_chat_bot_request(request):
-    last_prompt = request.data.get('last_prompt') or request.data.get('message')
-    conversation_history = request.data.get('conversation_history', [])
-
-    # Check for sensitive information
-    detected_service = detect_service_query(last_prompt)
-    print(f"DEBUG: detected_service: {detected_service}")
-    contains_sensitive = contains_sensitive_info(last_prompt)
-    print(f"DEBUG: contains_sensitive: {contains_sensitive}")
-    
-    if contains_sensitive or detected_service:
-        print(f"DEBUG: Taking early exit path")
-        if detected_service:
-            # Generate a humanistic response with general info and support
-            response = generate_humanistic_response(detected_service)
-        else:
-            response = "We value confidentiality and cannot share certain sensitive details publicly. However, we can assist you with services or general information. Please contact us at info@hporwanda.org or call us at +250-123-456789 for assistance."
-        
-        return Response({
-            'success': True,
-            'result': response
-        })
-    
-    print(f"DEBUG: Proceeding to Pinecone query")
-    
-    # Detect language and set appropriate system message
-    if "J'utilise le français" in last_prompt:
-        conversation_history.append({
-            'role': 'system',
-            'content': (
-                "Vous êtes Ishema ryanjye, un chatbot spécialisé UNIQUEMENT dans deux domaines: "
-                "1) Les informations sur la santé sexuelle et reproductive (SSR) "
-                "2) Le jeu de cartes Ishema ryanjye et ses règles "
-                "Vous devez REFUSER de répondre à toute question qui ne concerne pas ces deux sujets. "
-                "Si on vous pose une question sur autre chose, dites: 'Je ne peux répondre qu'aux questions sur la santé reproductive et le jeu Ishema ryanjye.' "
-                "Utilisez UNIQUEMENT les informations du manuel Ishema ryanjye fourni."
-            )
-        })
-    elif detect_kinyarwanda(last_prompt):
-        # Kinyarwanda response
-        conversation_history.append({
-            'role': 'system',
-            'content': (
-                "Uri Ishema ryanjye, chatbot ikoreshwa GUSA mu gutanga amakuru ku byinshi bibiri: "
-                "1) Amakuru yerekeye ubuzima bw'imyororokere na ubwongoze (SRH) "
-                "2) Imikino ya Ishema ryanjye ikarita n'amategeko yayo "
-                "Ugomba KWANGA gusubiza ibibazo byo mu bindi bintu bitari ibyo. "
-                "Niba umuntu akubajije ikindi kintu, vuga ko: 'Nshobora gusubiza ibibazo gusa byo ku buzima bw'imyororokere na ubwongoze ndetse n'imikino ya Ishema ryanjye.' "
-                "Koresha GUSA amakuru y'igitabo cya Ishema ryanjye watanzwe."
-            )
-        })
-    else:
-        # Proceed with the normal English response
-        conversation_history.append({
-            'role': 'system',
-            'content': (
-                "You are Ishema ryanjye, a specialized chatbot that ONLY handles two specific topics: "
-                "1) Sexual and Reproductive Health (SRH) information "
-                "2) Ishema ryanjye card game rules and gameplay "
-                "You must REFUSE to answer questions about anything else. "
-                "If asked about other topics, respond with: 'I can only answer questions about sexual and reproductive health topics and the Ishema ryanjye card game.' "
-                "Use ONLY information from the provided Ishema ryanjye handbook. Never use general knowledge or external information."
-            )
-        })
-
-    conversation_history.append({
-        'role': 'user',
-        'content': last_prompt
-    })
-
-    query_embedding = get_embedding(last_prompt)
-    print(f"DEBUG: query_embedding type: {type(query_embedding)}")
-    if isinstance(query_embedding, dict) and 'error' in query_embedding:
-        print(f"DEBUG: embedding error: {query_embedding}")
-        return Response({
-            'success': False,
-            'message': "Unable to process your question due to technical issues. Please try again later."
-        }, status=500)
-
-    pinecone_context = query_pinecone(query_embedding)
-    print(f"DEBUG: pinecone_context type: {type(pinecone_context)}")
-    if isinstance(pinecone_context, dict) and 'error' in pinecone_context:
-        print(f"DEBUG: pinecone error: {pinecone_context}")
-        # If no relevant data found, inform the user in appropriate language
-        if detect_kinyarwanda(last_prompt):
-            error_message = "Nshobora gutanga amakuru gusa ashingiye ku gitabo cya Ishema ryanjye n'amakuru y'ubuzima bw'imyororokere na ubwongoze byakatanzwe. Sinfite amakuru ku kibazo cyawe. Nyamuneka baza ku ngingo ziri mu gitabo."
-        elif "J'utilise le français" in last_prompt:
-            error_message = "Je ne peux fournir que des informations basées sur le manuel Ishema ryanjye et les données de santé reproductive qui ont été chargées. Je n'ai pas d'informations sur votre question spécifique. Veuillez poser des questions sur les sujets couverts dans le manuel."
-        else:
-            error_message = "I can only provide information based on the Ishema ryanjye handbook and sexual reproductive health data that has been loaded. I don't have information about your specific question. Please try asking about topics covered in the handbook."
-            
-        return Response({
-            'success': True,
-            'result': error_message
-        })
-
-    if pinecone_context:
-        # Determine response language based on the prompt
-        if detect_kinyarwanda(last_prompt):
-            language_instruction = "Subiza mu Kinyarwanda. Gukoresha gusa amakuru yatanzwe hano."
-        elif "J'utilise le français" in last_prompt:
-            language_instruction = "Répondez en français. Utilisez uniquement les informations fournies ici."
-        else:
-            language_instruction = "Respond in English. Only use the information provided here."
-            
-        conversation_history.append({
-            'role': 'system',
-            'content': f"Based on the Ishema ryanjye handbook and sexual reproductive health data: \n{pinecone_context}\n\n{language_instruction} ONLY answer questions about sexual and reproductive health OR the Ishema ryanjye card game. For any other topics, politely decline and redirect to these two areas. Do not add general knowledge outside of this context."
-        })
-    else:
-        # No context found - provide message in appropriate language
-        if detect_kinyarwanda(last_prompt):
-            no_context_message = "Nshobora gusubiza ibibazo gusa bishingiye ku amakuru ari mu gitabo cya Ishema ryanjye. Nyamuneka baza ku ngingo ziri mu gitabo."
-        elif "J'utilise le français" in last_prompt:
-            no_context_message = "Je ne peux répondre qu'aux questions basées sur les informations du manuel Ishema ryanjye. Veuillez poser des questions sur les sujets couverts dans le manuel."
-        else:
-            no_context_message = "I can only answer questions based on the information in the Ishema ryanjye handbook. Please ask about topics covered in the handbook."
-            
-        return Response({
-            'success': True,
-            'result': no_context_message
-        })
-
-    openai_body = {
-        'model': 'gpt-3.5-turbo',
-        'messages': conversation_history,
-        'temperature': 0.7
-    }
-    
-    headers = {
-        'Authorization': f'Bearer {OPENAI_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-
     try:
-        response = requests.post(
-            'https://api.openai.com/v1/chat/completions', 
-            json=openai_body, 
-            headers=headers,
-            timeout=30,
-            verify=True
+        # Extract messages from request
+        messages = request.data.get('messages', [])
+        model = request.data.get('model', 'gpt-4o')
+        
+        if not messages or not isinstance(messages, list):
+            return Response({'error': 'Invalid messages format'}, status=400)
+        
+        # Get the last user message
+        last_message = messages[-1].get('content') if messages else None
+        if not last_message:
+            return Response({'error': 'No valid message content found'}, status=400)
+        
+        # Generate embedding for the last user message
+        embedding = get_embedding(last_message)
+        
+        # Query Pinecone for relevant context
+        pinecone_context = query_pinecone(embedding)
+        
+        # Enhanced messages with system prompt
+        enhanced_messages = [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
+            *messages,
+            {'role': 'system', 'content': f'Relevant info: {pinecone_context or "No context available."}'}
+        ]
+        
+        # Stream OpenAI response
+        def generate_stream():
+            try:
+                headers = {
+                    'Authorization': f'Bearer {OPENAI_API_KEY}',
+                    'Content-Type': 'application/json'
+                }
+                
+                openai_body = {
+                    'model': model,
+                    'messages': enhanced_messages,
+                    'temperature': 0.1,
+                    'top_p': 0.1,
+                    'stream': True
+                }
+                
+                response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    json=openai_body,
+                    headers=headers,
+                    stream=True,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    yield f'{json.dumps({"content": "I encountered an issue processing your request. Please try again."})}\n'
+                    return
+                
+                has_content = False
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
+                            data = line[6:]
+                            if data.strip() == '[DONE]':
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                content = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                if content:
+                                    has_content = True
+                                    yield f'{json.dumps({"content": content})}\n'
+                            except json.JSONDecodeError:
+                                continue
+                
+                # Fallback if no content was streamed
+                if not has_content:
+                    fallback_message = (
+                        "I'm unable to provide a detailed answer based on the current database content." 
+                        if pinecone_context else 
+                        "I don't know the answer to that."
+                    )
+                    yield f'{json.dumps({"content": fallback_message})}\n'
+                    
+            except Exception as e:
+                # Fallback response using OpenAI non-streaming
+                fallback_messages = [
+                    {
+                        'role': 'system',
+                        'content': 'Respond only using database content. Do not guess or provide unrelated information. Keep responses short, focused, and concise. Ask for clarification if needed.'
+                    },
+                    {
+                        'role': 'user',
+                        'content': 'An error occurred, and no context is available. How would you respond?'
+                    }
+                ]
+                
+                try:
+                    fallback_headers = {
+                        'Authorization': f'Bearer {OPENAI_API_KEY}',
+                        'Content-Type': 'application/json'
+                    }
+                    fallback_body = {
+                        'model': model,
+                        'messages': fallback_messages,
+                        'temperature': 0.01,
+                        'top_p': 0.01,
+                        'max_tokens': 100
+                    }
+                    
+                    fallback_response = requests.post(
+                        'https://api.openai.com/v1/chat/completions',
+                        json=fallback_body,
+                        headers=fallback_headers,
+                        timeout=30
+                    )
+                    
+                    if fallback_response.status_code == 200:
+                        fallback_content = fallback_response.json().get('choices', [{}])[0].get('message', {}).get('content', 'An unexpected error occurred.')
+                    else:
+                        fallback_content = 'An unexpected error occurred.'
+                        
+                    yield f'{json.dumps({"content": fallback_content})}\n'
+                    
+                except:
+                    yield f'{json.dumps({"content": "An unexpected error occurred."})}\n'
+        
+        return StreamingHttpResponse(
+            generate_stream(),
+            content_type='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+            }
         )
-        if response.status_code == 200:
-            result = response.json().get('choices')[0]['message']['content']
-            # Ensure we only provide responses based on loaded data
-            if not result.strip():
-                result = "I can only provide information based on the Ishema ryanjye handbook. Please ask a specific question about the content in the handbook."
-            return Response({'success': True, 'result': result})
-        else:
-            return Response({
-                'success': False,
-                'message': f"OpenAI API Error: {response.status_code} - {response.text}"
-            }, status=500)
-    except requests.exceptions.SSLError as e:
-        return Response({
-            'success': False,
-            'message': "Technical issues connecting to AI service. Please try again later."
-        }, status=500)
-    except requests.exceptions.ConnectionError as e:
-        return Response({
-            'success': False,
-            'message': "Connection issues. Please try again later."
-        }, status=500)
-    except Exception as e:
-        return Response({
-            'success': False,
-            'message': f"Unexpected error: {str(e)}"
-        }, status=500)
+        
+    except Exception as error:
+        return Response({'content': 'An unexpected error occurred.'}, status=500)
 
 
 
 @api_view(['GET'])
 def load_chat_bot_base_configuration(request):
-    # Get language parameter from query string
-    language = request.GET.get('language', 'english').lower()
-    
-    # Base configuration
-    base_config = {
+    response = {
         'botStatus': 1,
         'fontSize': '16',
         'userAvatarURL': 'https://learnwithhasan.com/wp-content/uploads/2023/09/pngtree-businessman-user-avatar-wearing-suit-with-red-tie-png-image_5809521.png',
         'botImageURL': 'https://mlcorporateservices.com/wp-content/uploads/2022/09/cropped-Mlydie_-1.png',
+        'StartUpMessage': (
+            "Muraho! Welcome to ISHEMA RYANJYE. I'm here to help you with health information and our card game. "
+            "Choose your language or topic below to get started!"
+        ),
+        'commonButtons': [
+            {'buttonText': 'English', 'buttonPrompt': 'I want to continue in English'},
+            {'buttonText': 'Kinyarwanda', 'buttonPrompt': 'Nshaka gukomeza mu Kinyarwanda'},
+            {'buttonText': 'Ishema card game', 'buttonPrompt': 'Tell me about the ISHEMA RYANJYE card game'},
+            {'buttonText': 'SRH and Mental health support', 'buttonPrompt': 'What sexual and reproductive health and mental health services do you offer?'}
+        ]
     }
-    
-    # Language-specific configurations
-    if language == 'kinyarwanda':
-        response = {
-            **base_config,
-            'StartUpMessage': (
-                "Muraho! Ndi Ishema ryanjye. Nshobora gutanga amakuru ku buzima bw'imyororokere "
-                "na ubwongoze ndetse n'imikino ya Ishema ryanjye. Ungufasha ute?"
-            ),
-            'commonButtons': [
-                {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
-                {'buttonText': 'I use English', 'buttonPrompt': 'I use English'},
-                {'buttonText': 'Ni ayahe maservisisi dutanga?', 'buttonPrompt': 'Ni ayahe maservisisi dutanga?'},
-                {'buttonText': 'Nigute nashakatse?', 'buttonPrompt': 'Nigute nashakatse?'}
-            ]
-        }
-    elif language == 'french':
-        response = {
-            **base_config,
-            'StartUpMessage': (
-                "Bonjour! Je suis Ishema ryanjye. Je peux vous aider avec la santé reproductive "
-                "et le jeu de cartes Ishema ryanjye. Comment puis-je vous aider?"
-            ),
-            'commonButtons': [
-                {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
-                {'buttonText': 'I use English', 'buttonPrompt': 'I use English'},
-                {'buttonText': 'Quels services offrez-vous?', 'buttonPrompt': 'Quels services offrez-vous?'},
-                {'buttonText': 'Comment puis-je vous contacter?', 'buttonPrompt': 'Comment puis-je vous contacter?'}
-            ]
-        }
-    else:  # Default to English
-        response = {
-            **base_config,
-            'StartUpMessage': (
-                "Hello! I'm Ishema ryanjye. I can help you with sexual and reproductive health "
-                "topics and the Ishema ryanjye card game. How can I help you?"
-            ),
-            'commonButtons': [
-                {'buttonText': "J'utilise le français", 'buttonPrompt': 'J utilise le français'},
-                {'buttonText': 'Nkoresha Ikinyarwanda', 'buttonPrompt': 'Muraho, nkoresha Ikinyarwanda'},
-                {'buttonText': 'What services do you offer?', 'buttonPrompt': 'What services do you offer?'},
-                {'buttonText': 'How can I contact you?', 'buttonPrompt': 'How can I contact you?'}
-            ]
-        }
     
     return JsonResponse(response)

@@ -29,7 +29,7 @@ def main():
     
     # Load PDF using UnstructuredPDFLoader
     print("Loading data from PDF...")
-    loader = UnstructuredPDFLoader("ISHEMA_RYANJYE_HANDBOOK-ENGLISH_VERSION-_RBC-WHO-HPO_final.pdf")  # Update with your file path
+    loader = UnstructuredPDFLoader("agatabo_agaciro_kanjye_final_version.pdf")  # Update with your file path
     data = loader.load()
 
     print(f'Loaded {len(data)} document(s) from the PDF.')
