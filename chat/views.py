@@ -251,13 +251,12 @@ def load_chat_bot_base_configuration(request):
         'userAvatarURL': 'https://learnwithhasan.com/wp-content/uploads/2023/09/pngtree-businessman-user-avatar-wearing-suit-with-red-tie-png-image_5809521.png',
         'botImageURL': 'https://mlcorporateservices.com/wp-content/uploads/2022/09/cropped-Mlydie_-1.png',
         'StartUpMessage': (
-            "Muraho! Welcome to ISHEMA RYANJYE. I'm here to help you with health information and our card game. "
-            "Choose your language or topic below to get started!"
+            "Hello! I am ISHEMA RYANJYE Bot. I'm here to help you with health information and our card game. "
         ),
         'commonButtons': [
             {'buttonText': 'English', 'buttonPrompt': 'I want to continue in English'},
             {'buttonText': 'Kinyarwanda', 'buttonPrompt': 'Nshaka gukomeza mu Kinyarwanda'},
-            {'buttonText': 'Ishema card game', 'buttonPrompt': 'Tell me about the ISHEMA RYANJYE card game'},
+            {'buttonText': 'Ishema Ryanjye card game', 'buttonPrompt': 'Tell me about the ISHEMA RYANJYE card game'},
             {'buttonText': 'SRH and Mental health support', 'buttonPrompt': 'What sexual and reproductive health and mental health services do you offer?'}
         ]
     }
