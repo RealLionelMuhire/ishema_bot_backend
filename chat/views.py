@@ -144,8 +144,9 @@ def handle_chat_bot_request(request):
                     'model': model,
                     'messages': enhanced_messages,
                     'temperature': 0.1,
-                    'top_p': 0.1,
-                    'stream': True
+                    'top_p': 0.2,
+                    'stream': True,
+                    'max_tokens': 300
                 }
                 
                 response = requests.post(
@@ -257,7 +258,8 @@ def load_chat_bot_base_configuration(request):
             {'buttonText': 'English', 'buttonPrompt': 'I want to continue in English'},
             {'buttonText': 'Kinyarwanda', 'buttonPrompt': 'Nshaka gukomeza mu Kinyarwanda'},
             {'buttonText': 'Cards game', 'buttonPrompt': 'Tell me about the ISHEMA RYANJYE card game'},
-            {'buttonText': 'SRH and Mental health support', 'buttonPrompt': 'What sexual and reproductive health and mental health services do you offer?'}
+            {'buttonText': 'SRH and Mental health support', 'buttonPrompt': 'What sexual and reproductive health and mental health services do you offer?'},
+            {'buttonText': 'Nutrition', 'buttonPrompt': 'Can you provide information about nutrition?'}
         ]
     }
     
