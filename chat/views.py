@@ -258,7 +258,8 @@ def load_chat_bot_base_configuration(request):
             {'buttonText': 'English', 'buttonPrompt': 'I want to continue in English'},
             {'buttonText': 'Kinyarwanda', 'buttonPrompt': 'Nshaka gukomeza mu Kinyarwanda'},
             {'buttonText': 'Cards game', 'buttonPrompt': 'Tell me about the ISHEMA RYANJYE card game'},
-            {'buttonText': 'SRH and Mental health support', 'buttonPrompt': 'What sexual and reproductive health and mental health services do you offer?'},
+            {'buttonText': 'SRH', 'buttonPrompt': 'Tell me about sexual and reproductive health services.'},
+            {'buttonText': 'Mental Health', 'buttonPrompt': 'Can you provide information about mental health support?'},
             {'buttonText': 'Nutrition', 'buttonPrompt': 'Can you provide information about nutrition?'}
         ]
     }
